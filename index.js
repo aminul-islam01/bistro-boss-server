@@ -29,24 +29,44 @@ async function run() {
 
     const menuCollection = client.db("BistroBossDB").collection("menu");
     const reviewsCollection = client.db("BistroBossDB").collection("reviews");
+    const usersCollection = client.db("BistroBossDB").collection("users");
     const cartsCollection = client.db("BistroBossDB").collection("carts");
 
+    // menu collections operation start here
     app.get('/menu', async(req, res) => {
         const menu = await menuCollection.find().toArray();
         res.send(menu);
     })
 
+    // review collections operation start here
     app.get('/reviews', async(req, res) => {
         const reviews = await reviewsCollection.find().toArray();
         res.send(reviews);
     })
+
+    // user collections operations start here
+    app.get('/users', async(req, res)=> {
+      const result = await usersCollection.find().toArray();
+      res.send(result);
+    })
+
+    app.post('/users', async(req, res) => {
+      const user = req.body;
+      const query = {email: user.email}
+      const existing = await usersCollection.findOne(query);
+      if(existing) {
+        return res.send('user already exist')
+      }
+      const result = await usersCollection.insertOne(user);
+      res.send(user)
+    })
     
 
-    // carts operation start here
+    // carts collections operation start here
     app.get('/carts', async(req, res) => {
       const email = req.query.email;
       if(!email) {
-        res.send([])
+        return res.send([])
       }
       const query = {email: email};
       const result = await cartsCollection.find(query).toArray();
