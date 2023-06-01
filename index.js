@@ -15,7 +15,6 @@ const verifyJWT = (req, res, next) => {
   if (!authorization) {
     return res.status(401).send({ error: true, message: 'unauthorized access' });
   }
-  // bearer token
   const token = authorization.split(' ')[1];
 
   jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
@@ -53,7 +52,7 @@ async function run() {
     app.post('/jwt', (req, res) => {
       const user = req.body;
       const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {expiresIn: '1h'});
-      res.send(token)
+      res.send({token})
     })
 
     // Warning: use verifyJWT before using verifyAdmin
@@ -72,6 +71,12 @@ async function run() {
     app.get('/menu', async(req, res) => {
         const menu = await menuCollection.find().toArray();
         res.send(menu);
+    })
+
+    app.post('/menu', verifyJWT, verifyAdmin, async(req, res) => {
+      const newItem = req.body;
+      const result = await menuCollection.insertOne(newItem);
+      res.send(result)
     })
 
     // review collections operation start here
