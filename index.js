@@ -49,6 +49,7 @@ async function run() {
     const reviewsCollection = client.db("BistroBossDB").collection("reviews");
     const usersCollection = client.db("BistroBossDB").collection("users");
     const cartsCollection = client.db("BistroBossDB").collection("carts");
+    const paymentsCollection = client.db("BistroBossDB").collection("payments");
 
     app.post('/jwt', (req, res) => {
       const user = req.body;
@@ -178,6 +179,51 @@ async function run() {
         clientSecret: paymentIntent.client_secret,
       });
     });
+
+
+    // payment related api
+    app.post('/payments', verifyJWT, async(req, res) => {
+      const payment = req.body;
+
+      const query = {_id: {$in: payment.cartItems.map(id => new ObjectId(id))}}
+      const deleteResult = await cartsCollection.deleteMany(query);
+
+      const insertResult = await paymentsCollection.insertOne(payment);
+      res.send({deleteResult, insertResult})
+    })
+
+
+    app.get('/admin-stats', verifyJWT, verifyJWT, async(req, res) => {
+      const users = await usersCollection.estimatedDocumentCount();
+      const menuItems = await menuCollection.estimatedDocumentCount();
+      const orders = await paymentsCollection.estimatedDocumentCount();
+
+      // ------------- simple system------------
+      // const payments = await paymentCollection.find().toArray();
+      // const revenues = payments.reduce( ( sum, payment) => sum + payment.price, 0)
+
+      // -------Best system---------
+      const totalRevenue = await paymentsCollection.aggregate([
+        {
+          $group: {
+            _id: null,
+            total: { $sum: '$price' }
+          }
+        }
+      ]).toArray();
+      const revenues = totalRevenue[0].total;
+
+      res.send({
+        users,
+        menuItems,
+        orders,
+        revenues
+      })
+    })
+
+
+
+
 
     // Send a ping to confirm a successful connection
     // await client.db("admin").command({ ping: 1 });
