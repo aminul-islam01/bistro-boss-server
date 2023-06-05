@@ -75,10 +75,35 @@ async function run() {
       res.send(menu);
     })
 
+    app.get('/menu/:id', async(req, res) => {
+      const id = req.params.id;
+      const query = {_id: new ObjectId(id)};
+      const result = await menuCollection.findOne(query);
+      res.send(result)
+    })
+
     app.post('/menu', verifyJWT, verifyAdmin, async (req, res) => {
       const newItem = req.body;
       const result = await menuCollection.insertOne(newItem);
       res.send(result)
+    })
+
+    app.put('/menu/:id', verifyJWT, verifyAdmin, async (req, res) => {
+      const item = req.body;
+      const id = req.params.id;
+      const filter = {_id: new ObjectId(id)};
+      const updateItem = {
+        $set: item
+      }
+      const result = await menuCollection.updateOne(filter, updateItem);
+      res.send(result);
+    })
+
+    app.delete('/menu/:id', verifyJWT, verifyAdmin, async (req, res) => {
+      const id = req.params.id;
+      const query = {_id: new ObjectId(id)};
+      const result = menuCollection.deleteOne(query);
+      res.send(result);
     })
 
     // review collections operation start here
@@ -246,7 +271,7 @@ async function run() {
           $project: {
             category: '$_id',
             count: '$count',
-            total: '$total',
+            total: { $round: ['$total', 2] },
             _id: 0
           }
         }
@@ -257,7 +282,7 @@ async function run() {
     });
     
 
-    
+
     console.log("You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
