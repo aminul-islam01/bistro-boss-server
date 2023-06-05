@@ -53,8 +53,8 @@ async function run() {
 
     app.post('/jwt', (req, res) => {
       const user = req.body;
-      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {expiresIn: '1h'});
-      res.send({token})
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' });
+      res.send({ token })
     })
 
     // Warning: use verifyJWT before using verifyAdmin
@@ -70,43 +70,43 @@ async function run() {
 
 
     // menu collections operation start here
-    app.get('/menu', async(req, res) => {
-        const menu = await menuCollection.find().toArray();
-        res.send(menu);
+    app.get('/menu', async (req, res) => {
+      const menu = await menuCollection.find().toArray();
+      res.send(menu);
     })
 
-    app.post('/menu', verifyJWT, verifyAdmin, async(req, res) => {
+    app.post('/menu', verifyJWT, verifyAdmin, async (req, res) => {
       const newItem = req.body;
       const result = await menuCollection.insertOne(newItem);
       res.send(result)
     })
 
     // review collections operation start here
-    app.get('/reviews', async(req, res) => {
-        const reviews = await reviewsCollection.find().toArray();
-        res.send(reviews);
+    app.get('/reviews', async (req, res) => {
+      const reviews = await reviewsCollection.find().toArray();
+      res.send(reviews);
     })
 
     // user collections operations start here
-    app.get('/users', verifyJWT, verifyAdmin, async(req, res)=> {
+    app.get('/users', verifyJWT, verifyAdmin, async (req, res) => {
       const result = await usersCollection.find().toArray();
       res.send(result);
     })
 
-    app.post('/users', async(req, res) => {
+    app.post('/users', async (req, res) => {
       const user = req.body;
-      const query = {email: user.email}
+      const query = { email: user.email }
       const existing = await usersCollection.findOne(query);
-      if(existing) {
+      if (existing) {
         return res.send('user already exist')
       }
       const result = await usersCollection.insertOne(user);
       res.send(user)
     })
-    
-    app.patch('/users/admin/:id', async(req, res) => {
+
+    app.patch('/users/admin/:id', async (req, res) => {
       const id = req.params.id;
-      const filter = {_id: new ObjectId(id)};
+      const filter = { _id: new ObjectId(id) };
       const updateDoc = {
         $set: {
           role: 'admin'
@@ -131,9 +131,9 @@ async function run() {
 
 
     // carts collections operation start here
-    app.get('/carts', verifyJWT, async(req, res) => {
+    app.get('/carts', verifyJWT, async (req, res) => {
       const email = req.query.email;
-      if(!email) {
+      if (!email) {
         return res.send([])
       }
 
@@ -144,28 +144,28 @@ async function run() {
       }
 
 
-      const query = {email: email};
+      const query = { email: email };
       const result = await cartsCollection.find(query).toArray();
       res.send(result);
     })
 
-    app.post('/carts', async(req, res) => {
+    app.post('/carts', async (req, res) => {
       const item = req.body;
       const result = await cartsCollection.insertOne(item);
       res.send(result);
     })
 
-    app.delete('/carts/:id', async(req, res) => {
+    app.delete('/carts/:id', async (req, res) => {
       const id = req.params.id;
-      const query = {_id: new ObjectId(id)};
+      const query = { _id: new ObjectId(id) };
       const result = cartsCollection.deleteOne(query);
       res.send(result)
     })
 
     // create payment intent
-    app.post("/create-payment-intent", verifyJWT, async(req, res) => {
+    app.post("/create-payment-intent", verifyJWT, async (req, res) => {
       const { price } = req.body;
-      const amount = price*100;
+      const amount = parseInt(price * 100);
       // Create a PaymentIntent with the order amount and currency
       const paymentIntent = await stripe.paymentIntents.create({
         amount: amount,
@@ -182,18 +182,19 @@ async function run() {
 
 
     // payment related api
-    app.post('/payments', verifyJWT, async(req, res) => {
+    app.post('/payments', verifyJWT, async (req, res) => {
       const payment = req.body;
+      payment.menuItems = payment.menuItems.map(id => new ObjectId(id));
 
-      const query = {_id: {$in: payment.cartItems.map(id => new ObjectId(id))}}
+      const query = { _id: { $in: payment.cartItems.map(id => new ObjectId(id)) } }
       const deleteResult = await cartsCollection.deleteMany(query);
 
       const insertResult = await paymentsCollection.insertOne(payment);
-      res.send({deleteResult, insertResult})
+      res.send({ deleteResult, insertResult })
     })
 
 
-    app.get('/admin-stats', verifyJWT, verifyJWT, async(req, res) => {
+    app.get('/admin-stats', verifyJWT, verifyAdmin, async (req, res) => {
       const users = await usersCollection.estimatedDocumentCount();
       const menuItems = await menuCollection.estimatedDocumentCount();
       const orders = await paymentsCollection.estimatedDocumentCount();
@@ -221,12 +222,42 @@ async function run() {
       })
     })
 
+    app.get('/order-stats', async (req, res) => {
+      const pipeline = [
+        {
+          $lookup: {
+            from: 'menu',
+            localField:'menuItems',
+            foreignField:'_id',
+            as: 'menuItemsData'
+          }
+        },
+        {
+          $unwind: '$menuItemsData'
+        },
+        {
+          $group: {
+            _id: '$menuItemsData.category',
+            count: { $sum: 1 },
+            total: { $sum: '$menuItemsData.price' }
+          }
+        },
+        {
+          $project: {
+            category: '$_id',
+            count: '$count',
+            total: '$total',
+            _id: 0
+          }
+        }
+      ];
+    
+      const result = await paymentsCollection.aggregate(pipeline).toArray();
+      res.send(result);
+    });
+    
 
-
-
-
-    // Send a ping to confirm a successful connection
-    // await client.db("admin").command({ ping: 1 });
+    
     console.log("You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
@@ -237,10 +268,10 @@ run().catch(console.dir);
 
 
 app.get('/', (req, res) => {
-    res.send('Bistro Boss Server is Running')
+  res.send('Bistro Boss Server is Running')
 })
 
 app.listen(port, () => {
-    console.log(`Bistro Boss Server is running on port ${port}`)
+  console.log(`Bistro Boss Server is running on port ${port}`)
 })
 
